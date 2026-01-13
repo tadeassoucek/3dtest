@@ -1,32 +1,38 @@
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "graphics.h"
 
-void pl_alloc(PointList *pl, size_t capacity) {
-    pl->points = (Vec3*)malloc(capacity);
-    pl->count = 0;
-    pl->capacity = capacity;
-}
+#define FOREGROUND_COLOR 0x00FF00
 
-void pl_append(PointList *pl, Vec3 p) {
-    if (pl->capacity == 0)
-        pl_alloc(pl, 128);
-    else if (pl->count + 1 >= pl->capacity)
-        pl->points = (Vec3*)realloc(pl->points, pl->capacity *= 2);
-    pl->points[pl->count++] = p;
-}
-
-Object obj_load(FILE *file) {
+Object load_object_file(FILE *file) {
     Object obj = {0};
-#define BUFSIZE 1024
-    char buf[BUFSIZE];
-    while (fgets(buf, BUFSIZE, file)) {
-        if (buf[0] != 'v' || buf[1] != ' ') continue;
-        float x, y, z;
-        sscanf(buf, "v %f %f %f", &x, &y, &z);
-        printf("creating point at %f %f %f\n", x, y, z);
-        pl_append(&obj.points, (Vec3){ x, y, z });
+    char name[GR_OBJ_FILE_BUFSIZE];
+    char buf[GR_OBJ_FILE_BUFSIZE];
+    while (fgets(buf, GR_OBJ_FILE_BUFSIZE, file)) {
+        if (buf[0] == 'o') {
+            sscanf(buf, "o %s", name);
+        }
+        else if (buf[0] == 'v' && buf[1] == ' ') {
+            float x, y, z;
+            sscanf(buf, "v %f %f %f", &x, &y, &z);
+            //printf("creating point at %f %f %f\n", x, y, z);
+            dl_append(obj.verts, ((Vec3){ x, y, z }));
+        }
+        else if (buf[0] == 'f') {
+            int verts[4];
+            int read = sscanf(buf, "f %d/%*d/%*d %d/%*d/%*d %d/%*d/%*d %d/%*d/%*d", &verts[0], &verts[1], &verts[2], &verts[3]);
+            Face face = {
+                .verts = malloc(read * sizeof(Face)),
+                .vertc = read
+            };
+            for (size_t i = 0; i < read; i++) {
+                face.verts[i] = verts[i];
+            }
+            dl_append(obj.faces, face);
+        }
     }
+    printf("> loaded object \"%s\" with %zu vertices and %zu faces\n", name, obj.verts.count, obj.faces.count);
     return obj;
 }
 
@@ -56,45 +62,69 @@ Vec2 project(Vec3 v) {
     };
 }
 
-void inspect_buffer() {
-    for (size_t y = 0; y < image_dim.y; y++) {
-        for (size_t x = 0; x < image_dim.x; x++) {
-            size_t i = image_dim.x * 3 * y + x * 3;
-            byte b = image_buffer[i] | image_buffer[i+1] | image_buffer[i+2];
-            if (b == 0)
-                putchar('.');
-            else
-                putchar('X');
-        }
-        putchar('\n');
+void draw_pixel(size_t x, size_t y, int color) {
+    if (x >= image_dim.x || y >= image_dim.y) return;
+    size_t r = image_dim.x * 3 * y;
+    size_t c = 3 * x;
+    image_buffer[r+c] = color & 0xFF;
+    image_buffer[r+c+1] = (color & 0xFF00) >> 8;
+    image_buffer[r+c+2] = (color & 0xFF0000) >> 16;
+}
+
+// this function is very silly and doesn't implement any anti-aliasing
+// oh well.
+void draw_line(ScreenVec a, ScreenVec b, int color) {
+    // we presume a is to the left of b; if not, switch them
+    if (a.x > b.x) {
+        ScreenVec t = a;
+        a = b;
+        b = t;
+    }
+    
+    int dx = b.x - a.x;
+    int dy = b.y - a.y;
+    float m = (float)dy/dx;
+    float y = a.y;
+    for (int x = a.x; x < b.x; x++) {
+        draw_pixel(x, (screenint)y, color);
+        y += m;
     }
 }
 
-void draw_pixel(size_t x, size_t y) {
-    size_t r = image_dim.x * 3 * y;
-    size_t c = 3 * x;
-    image_buffer[r+c] = 0x00;
-    image_buffer[r+c+1] = 0xFF;
-    image_buffer[r+c+2] = 0x00;
-}
-
-void draw_point(ScreenVec p, screenint s) {
+// draws a rectangle around the specified point
+void draw_point(ScreenVec p, screenint s, int color) {
     screenint d = s/2;
     if (p.x > image_dim.x || p.y > image_dim.y)
         return;
     for (int j = -d; j < d; j++)
         for (int i = -d; i < d; i++)
-            draw_pixel(p.x + i, p.y + j);
+            draw_pixel(p.x + i, p.y + j, color);
 }
 
 void draw_object(Object *obj) {
-    PointList *pts = &obj->points;
+    VertList *pts = &obj->verts;
+    ScreenVec *projected = malloc(pts->count * sizeof(ScreenVec));
     for (size_t i = 0; i < pts->count; i++) {
-        Vec3 actual = pts->points[i];
+        Vec3 actual = pts->items[i];
         actual = vec3_rotate(actual, obj->rotation);
         actual = vec3_add(actual, obj->transform);
-        draw_point(to_screen(project(actual)), 10);
+        projected[i] = to_screen(project(actual));
     }
+
+    //for (size_t i = 0; i < pts->count; i++)
+    //    draw_point(projected[i], 10);
+
+    int color = 0x22FF22;
+    for (size_t fi = 0; fi < obj->faces.count; fi++) {
+        Face face = obj->faces.items[fi];
+        for (size_t vi = 0; vi < face.vertc; vi++) {
+            ScreenVec a = projected[face.verts[vi]-1];
+            ScreenVec b = projected[face.verts[(vi+1)%face.vertc]-1];
+            draw_line(a, b, color);
+        }
+    }
+
+    free(projected);
 }
 
 FILE *write_frame(const char *path) {

@@ -4,31 +4,52 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+
 #include "vector.h"
 
+#define GR_OBJ_FILE_BUFSIZE 1024
+
 typedef struct {
-    Vec3 *points;
+    size_t *verts;
+    size_t vertc;
+} Face;
+
+typedef struct {
+    Vec3 *items;
     size_t capacity;
     size_t count;
-} PointList;
-
-void pl_alloc(PointList *pl, size_t capacity);
-void pl_append(PointList *pl, Vec3 p);
+} VertList;
 
 typedef struct {
-    PointList points;
+    Face *items;
+    size_t capacity;
+    size_t count;
+} FaceList;
+
+#define dl_append(list, el) do { \
+        if (list.count + 1 >= list.capacity) { \
+            if (list.capacity == 0) list.capacity = 128; \
+            else list.capacity *= 2; \
+            list.items = realloc(list.items, list.capacity * sizeof(*list.items)); \
+        } \
+        list.items[list.count++] = el; \
+    } while(0);
+
+typedef struct {
+    VertList verts;
+    FaceList faces;
     Vec3 transform;
     Vec2 rotation;
 } Object;
 
-Object obj_load(FILE *file);
+Object load_object_file(FILE *file);
 
 typedef uint8_t byte;
 
 void new_buffer();
-void inspect_buffer();
-void draw_pixel(size_t x, size_t y);
-void draw_point(ScreenVec p, screenint s);
+void draw_pixel(size_t x, size_t y, int color);
+void draw_line(ScreenVec a, ScreenVec b, int color);
+void draw_point(ScreenVec p, screenint s, int color);
 void draw_object(Object *obj);
 FILE *write_frame(const char *path);
 
