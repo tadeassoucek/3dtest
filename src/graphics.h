@@ -39,7 +39,8 @@ typedef struct {
     VertList verts;
     FaceList faces;
     Vec3 transform;
-    Vec2 rotation;
+    Vec3 rotation;
+    Vec3 scale;
 } Object;
 
 Object load_object_file(FILE *file);
@@ -50,7 +51,7 @@ void new_buffer();
 void draw_pixel(size_t x, size_t y, int color);
 void draw_line(ScreenVec a, ScreenVec b, int color);
 void draw_point(ScreenVec p, screenint s, int color);
-void draw_object(Object *obj);
+void draw_object(Object *obj, int vert_color, int line_color);
 FILE *write_frame(const char *path);
 
 #endif

@@ -9,6 +9,7 @@ Object load_object_file(FILE *file) {
     Object obj = {0};
     char name[GR_OBJ_FILE_BUFSIZE];
     char buf[GR_OBJ_FILE_BUFSIZE];
+    Vec3 min = {0}, max = {0};
     while (fgets(buf, GR_OBJ_FILE_BUFSIZE, file)) {
         if (buf[0] == 'o') {
             sscanf(buf, "o %s", name);
@@ -18,6 +19,12 @@ Object load_object_file(FILE *file) {
             sscanf(buf, "v %f %f %f", &x, &y, &z);
             //printf("creating point at %f %f %f\n", x, y, z);
             dl_append(obj.verts, ((Vec3){ x, y, z }));
+            if (x < min.x) min.x = x;
+            if (x > max.x) max.x = x;
+            if (y < min.y) min.y = y;
+            if (y > max.y) max.y = y;
+            if (z < min.z) min.z = z;
+            if (z > max.z) max.z = z;
         }
         else if (buf[0] == 'f') {
             int verts[4];
@@ -27,11 +34,32 @@ Object load_object_file(FILE *file) {
                 .vertc = read
             };
             for (size_t i = 0; i < read; i++) {
-                face.verts[i] = verts[i];
+                face.verts[i] = verts[i]-1;
             }
             dl_append(obj.faces, face);
+
+            if (0) {
+                printf("\t> created face (%d verts):", read);
+                for (size_t i = 0; i < read; i++) {
+                    Vec3 v = obj.verts.items[face.verts[i]-1];
+                    printf(" [%f;%f;%f]", v.x, v.y, v.z);
+                }
+                putchar('\n');
+            }
         }
     }
+
+    Vec3 origin = {
+        .x = (max.x + min.x) / 2,
+        .y = (max.y + min.y) / 2,
+        .z = (max.z + min.z) / 2,
+    };
+    obj.scale = (Vec3){ 1, 1, 1 };
+
+    for (size_t i = 0; i < obj.verts.count; i++) {
+        obj.verts.items[i] = vec3_sub(obj.verts.items[i], origin);
+    }
+
     printf("> loaded object \"%s\" with %zu vertices and %zu faces\n", name, obj.verts.count, obj.faces.count);
     return obj;
 }
@@ -47,28 +75,16 @@ void new_buffer() {
     memset(image_buffer, 0, to_buflen(image_dim));
 }
 
-ScreenVec to_screen(Vec2 p) {
-    // -1..1 => 0..2 => 0..1 => 0..w
-    return (ScreenVec){
-        .x = (p.x+1)/2 * image_dim.x,
-        .y = (1 - (p.y+1)/2) * image_dim.y,
-    };
-}
-
-Vec2 project(Vec3 v) {
-    return (Vec2){
-        .x = v.x/v.z,
-        .y = v.y/v.z,
-    };
-}
-
+// color is RGB
 void draw_pixel(size_t x, size_t y, int color) {
     if (x >= image_dim.x || y >= image_dim.y) return;
-    size_t r = image_dim.x * 3 * y;
-    size_t c = 3 * x;
-    image_buffer[r+c] = color & 0xFF;
-    image_buffer[r+c+1] = (color & 0xFF00) >> 8;
-    image_buffer[r+c+2] = (color & 0xFF0000) >> 16;
+    size_t i = image_dim.x * 3 * y + 3 * x;
+    // red
+    image_buffer[i]   = (color & 0xFF0000) >> 16;
+    // green
+    image_buffer[i+1] = (color & 0xFF00) >> 8;
+    // blue
+    image_buffer[i+2] = color & 0xFF;
 }
 
 // this function is very silly and doesn't implement any anti-aliasing
@@ -101,30 +117,31 @@ void draw_point(ScreenVec p, screenint s, int color) {
             draw_pixel(p.x + i, p.y + j, color);
 }
 
-void draw_object(Object *obj) {
-    VertList *pts = &obj->verts;
-    ScreenVec *projected = malloc(pts->count * sizeof(ScreenVec));
-    for (size_t i = 0; i < pts->count; i++) {
-        Vec3 actual = pts->items[i];
-        actual = vec3_rotate(actual, obj->rotation);
-        actual = vec3_add(actual, obj->transform);
-        projected[i] = to_screen(project(actual));
+void draw_object(Object *obj, int vert_color, int line_color) {
+    ScreenVec *projected_verts = malloc(obj->verts.count * sizeof(ScreenVec));
+    for (size_t i = 0; i < obj->verts.count; i++) {
+        Vec3 projected = obj->verts.items[i];
+        projected = vec3_scale(projected, obj->scale);
+        projected = vec3_rotate(projected, obj->rotation);
+        projected = vec3_add(projected, obj->transform);
+        projected_verts[i] = to_screen(project(projected), image_dim);
     }
 
-    //for (size_t i = 0; i < pts->count; i++)
-    //    draw_point(projected[i], 10);
+    if (vert_color)
+        for (size_t i = 0; i < obj->verts.count; i++)
+            draw_point(projected_verts[i], 10, vert_color);
 
-    int color = 0x22FF22;
     for (size_t fi = 0; fi < obj->faces.count; fi++) {
         Face face = obj->faces.items[fi];
         for (size_t vi = 0; vi < face.vertc; vi++) {
-            ScreenVec a = projected[face.verts[vi]-1];
-            ScreenVec b = projected[face.verts[(vi+1)%face.vertc]-1];
-            draw_line(a, b, color);
+            ScreenVec a = projected_verts[face.verts[vi]];
+            size_t nexti = vi == face.vertc-1 ? 0 : vi+1;
+            ScreenVec b = projected_verts[face.verts[nexti]];
+            draw_line(a, b, line_color);
         }
     }
 
-    free(projected);
+    free(projected_verts);
 }
 
 FILE *write_frame(const char *path) {

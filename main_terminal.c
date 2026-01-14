@@ -12,31 +12,24 @@ Object obj = {0};
 void create_frame(int frame, int fps, float time) {
     // clear buffer, draw object to it
     new_buffer();
-    draw_object(&obj, 0x0000FF, 0xFF0000);
+    draw_object(&obj);
 
     // output to a file
     char buf[255];
     snprintf(buf, sizeof(buf), "out/image%03d.ppm", frame);
     FILE *f = write_frame(buf);
     fclose(f);
-    printf("> wrote %s (time %f)\n", buf, time);
+    //printf("> wrote %s (time %f)\n", buf, time);
 
     // animate
     float dt = 1./fps;
-    /*
-    if (time <= 0.5) {
-        obj.rotation.y += M_PI/2*dt;
-        obj.transform.z += dt;
-    }
-    else {
-        obj.rotation.x += M_PI*dt;
-        obj.rotation.y += M_PI/2*dt;
-        obj.transform.z -= dt;
-    }
-    */
     obj.rotation.x += M_PI/2*dt;
     obj.rotation.y += M_PI/2*dt;
     obj.rotation.z += M_PI/2*dt;
+
+    char cmd[255];
+    snprintf(cmd, sizeof(cmd), "chafa \"%s\" --format symbols --align center", buf);
+    (void)system(cmd);
 }
 
 int main() {
