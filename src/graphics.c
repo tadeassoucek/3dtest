@@ -1,24 +1,34 @@
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
-#include "graphics.h"
+#include "./graphics.h"
 
-#define FOREGROUND_COLOR 0x00FF00
-
+// parse a given .OBJ file
 Object load_object_file(FILE *file) {
     Object obj = {0};
+    static size_t total_id = 0;
+    obj.id = total_id++;
+
     char name[GR_OBJ_FILE_BUFSIZE];
     char buf[GR_OBJ_FILE_BUFSIZE];
-    Vec3 min = {0}, max = {0};
+
+    // we use these vectors for calculating the origin, i.e. the 
+    // midpoint of the object
+    Vec3 min = {0};
+    Vec3 max = {0};
+
+    // read line
     while (fgets(buf, GR_OBJ_FILE_BUFSIZE, file)) {
         if (buf[0] == 'o') {
             sscanf(buf, "o %s", name);
+            obj.name = strdup(name);
         }
         else if (buf[0] == 'v' && buf[1] == ' ') {
             float x, y, z;
             sscanf(buf, "v %f %f %f", &x, &y, &z);
             //printf("creating point at %f %f %f\n", x, y, z);
             dl_append(obj.verts, ((Vec3){ x, y, z }));
+
+            // update min/max vectors accordingly
             if (x < min.x) min.x = x;
             if (x > max.x) max.x = x;
             if (y < min.y) min.y = y;
@@ -27,6 +37,7 @@ Object load_object_file(FILE *file) {
             if (z > max.z) max.z = z;
         }
         else if (buf[0] == 'f') {
+            // we assume the face consists of <=4 vertices
             int verts[4];
             int read = sscanf(buf, "f %d/%*d/%*d %d/%*d/%*d %d/%*d/%*d %d/%*d/%*d", &verts[0], &verts[1], &verts[2], &verts[3]);
             Face face = {
@@ -50,17 +61,16 @@ Object load_object_file(FILE *file) {
     }
 
     Vec3 origin = {
-        .x = (max.x + min.x) / 2,
-        .y = (max.y + min.y) / 2,
-        .z = (max.z + min.z) / 2,
+        (max.x + min.x) / 2,
+        (max.y + min.y) / 2,
+        (max.z + min.z) / 2,
     };
     obj.scale = (Vec3){ 1, 1, 1 };
 
-    for (size_t i = 0; i < obj.verts.count; i++) {
+    for (size_t i = 0; i < obj.verts.count; i++)
         obj.verts.items[i] = vec3_sub(obj.verts.items[i], origin);
-    }
 
-    printf("> loaded object \"%s\" with %zu vertices and %zu faces\n", name, obj.verts.count, obj.faces.count);
+    printf("> loaded object \"%s\"#%zu with %zu vertices and %zu faces\n", obj.name, obj.id, obj.verts.count, obj.faces.count);
     return obj;
 }
 
@@ -75,21 +85,29 @@ void new_buffer() {
     memset(image_buffer, 0, to_buflen(image_dim));
 }
 
+Color to_color(colorhex color) {
+    return (Color){
+        (color & 0xFF0000) >> 16,
+        (color & 0x00FF00) >> 8,
+        (color & 0x0000FF),
+    };
+}
+
 // color is RGB
-void draw_pixel(size_t x, size_t y, int color) {
+void draw_pixel(size_t x, size_t y, Color color) {
     if (x >= image_dim.x || y >= image_dim.y) return;
     size_t i = image_dim.x * 3 * y + 3 * x;
     // red
-    image_buffer[i]   = (color & 0xFF0000) >> 16;
+    image_buffer[i]   = color.r;
     // green
-    image_buffer[i+1] = (color & 0xFF00) >> 8;
+    image_buffer[i+1] = color.g;
     // blue
-    image_buffer[i+2] = color & 0xFF;
+    image_buffer[i+2] = color.b;
 }
 
 // this function is very silly and doesn't implement any anti-aliasing
 // oh well.
-void draw_line(ScreenVec a, ScreenVec b, int color) {
+void draw_line(ScreenVec a, ScreenVec b, Color color) {
     // we presume a is to the left of b; if not, switch them
     if (a.x > b.x) {
         ScreenVec t = a;
@@ -108,7 +126,7 @@ void draw_line(ScreenVec a, ScreenVec b, int color) {
 }
 
 // draws a rectangle around the specified point
-void draw_point(ScreenVec p, screenint s, int color) {
+void draw_point(ScreenVec p, screenint s, Color color) {
     screenint d = s/2;
     if (p.x > image_dim.x || p.y > image_dim.y)
         return;
@@ -117,7 +135,7 @@ void draw_point(ScreenVec p, screenint s, int color) {
             draw_pixel(p.x + i, p.y + j, color);
 }
 
-void draw_object(Object *obj, int vert_color, int line_color) {
+void draw_object(Object *obj, colorhex vert_color, colorhex line_color) {
     ScreenVec *projected_verts = malloc(obj->verts.count * sizeof(ScreenVec));
     for (size_t i = 0; i < obj->verts.count; i++) {
         Vec3 projected = obj->verts.items[i];
@@ -127,17 +145,23 @@ void draw_object(Object *obj, int vert_color, int line_color) {
         projected_verts[i] = to_screen(project(projected), image_dim);
     }
 
+    Color vert_color_t = to_color(vert_color);
+    Color line_color_t = to_color(line_color);
+
+    // draw vertices
     if (vert_color)
         for (size_t i = 0; i < obj->verts.count; i++)
-            draw_point(projected_verts[i], 10, vert_color);
+            draw_point(projected_verts[i], 10, vert_color_t);
 
+    // draw lines
     for (size_t fi = 0; fi < obj->faces.count; fi++) {
         Face face = obj->faces.items[fi];
         for (size_t vi = 0; vi < face.vertc; vi++) {
             ScreenVec a = projected_verts[face.verts[vi]];
+            // next index (i+1 or 0)
             size_t nexti = vi == face.vertc-1 ? 0 : vi+1;
             ScreenVec b = projected_verts[face.verts[nexti]];
-            draw_line(a, b, line_color);
+            draw_line(a, b, line_color_t);
         }
     }
 
@@ -146,9 +170,13 @@ void draw_object(Object *obj, int vert_color, int line_color) {
 
 FILE *write_frame(const char *path) {
     FILE *file = fopen(path, "wb");
-    fprintf(file, "P6\n");
-    fprintf(file, "%d %d\n", image_dim.x, image_dim.y);
-    fprintf(file, "255\n");
+    // magic code
+    fprintf(file, "P6 ");
+    // resolution
+    fprintf(file, "%d %d ", image_dim.x, image_dim.y);
+    // color depth
+    fprintf(file, "255 ");
+    // write buffer
     fwrite(image_buffer, 1, to_buflen(image_dim), file);
     return file;
 }

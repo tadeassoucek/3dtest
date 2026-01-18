@@ -9,6 +9,15 @@
 
 #define GR_OBJ_FILE_BUFSIZE 1024
 
+typedef uint8_t byte;
+typedef uint32_t colorhex;
+
+typedef struct {
+    byte r;
+    byte g;
+    byte b;
+} Color;
+
 typedef struct {
     size_t *verts;
     size_t vertc;
@@ -36,22 +45,31 @@ typedef struct {
     } while(0);
 
 typedef struct {
+    // Name of the object.
+    char *name;
+    // Id number.
+    size_t id;
+    // Dynamic list of all vertices.
     VertList verts;
+    // Dynamic list of all faces.
     FaceList faces;
+    // Transform vector. Move the object by this vector in the scene.
     Vec3 transform;
+    // Rotation vector.
     Vec3 rotation;
+    // Scale vector.
     Vec3 scale;
 } Object;
 
 Object load_object_file(FILE *file);
 
-typedef uint8_t byte;
+Color to_color(colorhex);
 
 void new_buffer();
-void draw_pixel(size_t x, size_t y, int color);
-void draw_line(ScreenVec a, ScreenVec b, int color);
-void draw_point(ScreenVec p, screenint s, int color);
-void draw_object(Object *obj, int vert_color, int line_color);
+void draw_pixel(size_t x, size_t y, Color);
+void draw_line(ScreenVec a, ScreenVec b, Color);
+void draw_point(ScreenVec p, screenint s, Color);
+void draw_object(Object *obj, colorhex vert_color, colorhex line_color);
 FILE *write_frame(const char *path);
 
 #endif

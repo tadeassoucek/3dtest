@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <math.h>
-#include "vector.h"
+
+#include "./vector.h"
 
 ScreenVec screen_vec(screenint x, screenint y) {
     return (ScreenVec){

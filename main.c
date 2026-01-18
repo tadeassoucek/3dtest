@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "vector.h"
-#include "graphics.h"
+#include "src/vector.h"
+#include "src/graphics.h"
 
 extern ScreenVec image_dim;
 
@@ -23,7 +23,6 @@ void create_frame(int frame, int fps, float time) {
 
     // animate
     float dt = 1./fps;
-    /*
     if (time <= 0.5) {
         obj.rotation.y += M_PI/2*dt;
         obj.transform.z += dt;
@@ -33,24 +32,19 @@ void create_frame(int frame, int fps, float time) {
         obj.rotation.y += M_PI/2*dt;
         obj.transform.z -= dt;
     }
-    */
-    //obj.rotation.x += M_PI/2*dt;
     obj.rotation.y += M_PI/2*dt;
-    //obj.rotation.z += M_PI/2*dt;
 }
 
 int main() {
     image_dim = (ScreenVec){ 800, 800 };
 
-    //FILE *f = fopen("res/cube.obj", "r");
-    //FILE *f = fopen("res/utah_teapot.obj", "r");
-    FILE *f = fopen("res/lowpoly-figure.obj", "r");
+    FILE *f = fopen("res/utah_teapot.obj", "r");
     obj = load_object_file(f);
     fclose(f);
     
     //obj.transform.y = 0.5;
     obj.transform.z = 5.0;
-    obj.scale = vec3_scale_s(obj.scale, 2);
+    //obj.scale = vec3_scale_s(obj.scale, 2);
 
     const int seconds = 4;
     const int fps = 60;
