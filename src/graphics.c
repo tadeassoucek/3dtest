@@ -11,8 +11,7 @@ Object load_object_file(FILE *file) {
     char name[GR_OBJ_FILE_BUFSIZE];
     char buf[GR_OBJ_FILE_BUFSIZE];
 
-    // we use these vectors for calculating the origin, i.e. the 
-    // midpoint of the object
+    // we use these vectors for calculating the origin, i.e. the midpoint of the object
     Vec3 min = {0};
     Vec3 max = {0};
 
@@ -114,7 +113,7 @@ void draw_line(ScreenVec a, ScreenVec b, Color color) {
         a = b;
         b = t;
     }
-    
+
     int dx = b.x - a.x;
     int dy = b.y - a.y;
     float m = (float)dy/dx;

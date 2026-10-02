@@ -12,7 +12,7 @@ Object obj = {0};
 void create_frame(int frame, int fps, float time) {
     // clear buffer, draw object to it
     new_buffer();
-    draw_object(&obj, 0x000000, 0x00FFFF);
+    draw_object(&obj, 0x000000, 0xFF00FF);
 
     // output to a file
     char buf[255];
