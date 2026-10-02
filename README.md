@@ -4,4 +4,4 @@ A 3D software renderer written in C. It's based on two Tsoding videos, [One Form
 
 The renderer loads a Wavefront OBJ file and renders it to a series of PPM image files. These can be combined into a video.
 
-![Sample output video showing a green rotating wireframe of the Utah teapot](out/video.mp4)
+![Sample output GIF showing a green rotating wireframe of the Utah teapot](out/video.gif)

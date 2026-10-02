@@ -10,7 +10,7 @@ compile:
 
 video: compile clean
 	$(BINARY)
-	ffmpeg -i "out/image%03d.ppm" -r 60 out/video.mp4 -y
+	ffmpeg -i "out/image%03d.ppm" -r 60 out/video.gif -y
 	mpv --loop out/video.mp4
 
 clean:
